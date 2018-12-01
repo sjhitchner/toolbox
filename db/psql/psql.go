@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -146,48 +147,52 @@ func (t *PSQLHandler) InsertWithId(ctx context.Context, query string, params ...
 
 	tx, err := t.conn.Beginx()
 	if err != nil {
-		return 0, err
+		return 0, Rollback(ctx, tx, err)
 	}
 
 	var id int64
-	if err := tx.QueryRow(query, params...).Scan(&id); sql.ErrNoRows == err {
-		return 0, err
+	if err := tx.QueryRow(query, params...).Scan(&id); err != nil {
+		//sql.ErrNoRows == err {
+		return 0, Rollback(ctx, tx, err)
 	}
 
-	return id, err
+	return id, Commit(ctx, tx, err)
 }
 
 func (t *PSQLHandler) Insert(ctx context.Context, query string, params ...interface{}) error {
 
 	tx, err := t.conn.Beginx()
 	if err != nil {
-		return err
+		return Rollback(ctx, tx, err)
 	}
 
 	// TODO result
-	if _, err := tx.Exec(query, params...); sql.ErrNoRows == err {
-		return err
+	if _, err := tx.Exec(query, params...); err != nil {
+		//sql.ErrNoRows == err {
+		return Rollback(ctx, tx, err)
 	}
-	return err
+
+	return Commit(ctx, tx, err)
 }
 
 func (t *PSQLHandler) Update(ctx context.Context, query string, params ...interface{}) (int64, error) {
 
 	tx, err := t.conn.Beginx()
 	if err != nil {
-		return 0, err
+		return 0, Rollback(ctx, tx, err)
 	}
 
 	result, err := tx.Exec(query, params...)
 	if err != nil {
-		return 0, err
+		return 0, Rollback(ctx, tx, err)
 	}
 
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return 0, nil
+		return 0, Rollback(ctx, tx, err)
 	}
-	return affected, nil
+
+	return affected, Commit(ctx, tx, err)
 }
 
 func (t *PSQLHandler) Delete(ctx context.Context, query string, params ...interface{}) (int64, error) {
@@ -195,19 +200,20 @@ func (t *PSQLHandler) Delete(ctx context.Context, query string, params ...interf
 }
 
 func Commit(ctx context.Context, tx *sqlx.Tx, err error) error {
+	fmt.Println("Commit", err)
 	if err != nil {
 		return Rollback(ctx, tx, err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return errors.Wrap(err, "Commit Failed")
 	}
 	return nil
 }
 
 func Rollback(ctx context.Context, tx *sqlx.Tx, err error) error {
 	if err := tx.Rollback(); err != nil {
-		return err
+		return errors.Wrap(err, "Rollback Failed")
 	}
 	return err
 }

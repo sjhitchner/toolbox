@@ -7,7 +7,6 @@ import (
 	"net/http/httputil"
 
 	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/starwars"
 	//"github.com/graph-gophers/graphql-go/relay"
 )
 
@@ -63,7 +62,7 @@ func (t *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if len(response.Errors) > 0 {
 		for _, err := range response.Errors {
-			log.Printf("%+v\n", err)
+			log.Printf("%v\n", err)
 		}
 	}
 
@@ -83,7 +82,7 @@ type GraphiQLHandler struct {
 
 func NewGraphiQLHandler(schema string) *GraphiQLHandler {
 	return &GraphiQLHandler{
-		schema: graphql.MustParseSchema(starwars.Schema, nil),
+		schema: graphql.MustParseSchema(schema, nil),
 	}
 }
 

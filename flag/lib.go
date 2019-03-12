@@ -23,6 +23,7 @@ package flag
 import (
 	"flag"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"runtime"
@@ -91,6 +92,24 @@ func BoolVar(p *bool, name string, value bool, usage string) {
 		}
 	}
 	flag.BoolVar(p, name, value, usage)
+}
+
+func LogLevelVar(p *log.Level, name, value, usage string) {
+	v, ok := Getenv(name)
+	if ok {
+		value = v
+	}
+
+	levelStr := flag.String(name, value, usage)
+
+	l, err := log.ParseLevel(*levelStr)
+	fmt.Println("HERE", l, err)
+	if err != nil {
+		*p = log.InfoLevel
+		return
+	}
+
+	*p = l
 }
 
 func toEnvKey(name string) string {

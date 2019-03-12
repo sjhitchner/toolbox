@@ -2,6 +2,7 @@ package flag
 
 import (
 	"flag"
+	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
 	"os"
 	"testing"
@@ -90,6 +91,25 @@ func (s *LibSuite) TestEnvVariablesDuration(c *C) {
 	}
 	DurationVar(&d, "test-duration-bad", 456, "")
 	c.Assert(d, Equals, time.Duration(456))
+}
+
+func (s *LibSuite) TestEnvVariablesLogLevel(c *C) {
+	flag.Parse()
+
+	if err := os.Setenv("LOG_LEVEL_WARN", "warn"); err != nil {
+		c.Fatal(err)
+	}
+
+	var level log.Level
+	LogLevelVar(&level, "log-level-warn", "trace", "")
+	c.Assert(level.String(), Equals, "warning")
+
+	if err := os.Setenv("LOG_LEVEL_BAD", "debugx"); err != nil {
+		c.Fatal(err)
+	}
+
+	LogLevelVar(&level, "log-level-bad", "info", "")
+	c.Assert(level.String(), Equals, "info")
 }
 
 func (s *LibSuite) TestEnvVariablesBool(c *C) {

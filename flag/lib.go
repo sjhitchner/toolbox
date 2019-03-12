@@ -103,7 +103,6 @@ func LogLevelVar(p *log.Level, name, value, usage string) {
 	levelStr := flag.String(name, value, usage)
 
 	l, err := log.ParseLevel(*levelStr)
-	fmt.Println("HERE", l, err)
 	if err != nil {
 		*p = log.InfoLevel
 		return

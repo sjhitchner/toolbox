@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -24,6 +26,41 @@ type PSQLHandler struct {
 	host string
 	name string
 	port int
+}
+
+func NewPSQLDBHandlerFromString(str string) (*PSQLHandler, error) {
+	u, err := url.Parse(str)
+	if err != nil {
+		return nil, err
+	}
+
+	port := 5432
+	if u.Port() != "" {
+		p, err := strconv.Atoi(u.Port())
+		if err != nil {
+			return nil, err
+		}
+		port = p
+	}
+
+	password, _ := u.User.Password()
+	sslMode := SSLMode(u.Query().Get("sslmode"))
+	switch sslMode {
+	case SSLModeRequire:
+	case SSLModeDisable:
+	case SSLModeFull:
+	default:
+		sslMode = ""
+	}
+
+	return NewPSQLDBHandler(
+		u.Hostname(),
+		u.Path,
+		u.User.Username(),
+		password,
+		port,
+		sslMode,
+	)
 }
 
 // Postgres Connection Object.  Wraps a sqlx.DB and provides a DBConnection() method to access the

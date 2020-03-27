@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/sjhitchner/graphql-resolver/lib/db/psql"
+	"github.com/sjhitchner/toolbox/db/psql"
 )
 
 type Config struct {
@@ -63,7 +63,7 @@ func InitializeDB(configPath string) error {
 	}
 
 	for _, file := range config.Files {
-		results, err := dbh.DBConnection().Exec(
+		results, err := dbh.DB().Exec(
 			fmt.Sprintf(`SELECT EXISTS(
                           SELECT * 
                           FROM information_schema.tables 
@@ -79,8 +79,8 @@ func InitializeDB(configPath string) error {
 			continue
 		}
 
-		loadSchema(dbh.DBConnection(), file.Table, file.Schema)
-		loadData(dbh.DBConnection(), file.Table, file.Data)
+		loadSchema(dbh.DB(), file.Table, file.Schema)
+		loadData(dbh.DB(), file.Table, file.Data)
 	}
 
 	return nil

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/sjhitchner/toolbox/db/psql"
+	"github.com/sjhitchner/toolbox/pkg/db/psql"
 )
 
 type Config struct {

@@ -50,12 +50,12 @@ func NewPSQLDBHandlerFromString(str string) (*PSQLHandler, error) {
 	case SSLModeDisable:
 	case SSLModeFull:
 	default:
-		sslMode = ""
+		sslMode = SSLModeDisable
 	}
 
 	return NewPSQLDBHandler(
 		u.Hostname(),
-		u.Path,
+		u.Path[1:],
 		u.User.Username(),
 		password,
 		port,
@@ -237,7 +237,6 @@ func (t *PSQLHandler) Delete(ctx context.Context, query string, params ...interf
 }
 
 func Commit(ctx context.Context, tx *sqlx.Tx, err error) error {
-	fmt.Println("Commit", err)
 	if err != nil {
 		return Rollback(ctx, tx, err)
 	}

@@ -1,143 +1,174 @@
-/*
-
-const CSV = "foo,bar,10,01/02/2006"
-
-type Row struct {
-	Foo string
-	Bar string
-	Amount float44
-	Date time.Time `csv:"01/02/2006"`
-}
-
-
-reader := csv.NewReader(strings.NewReader(CSV))
-
-var rows []Row
-err := NewDecoder(reader).Decode(&rows)
-
-*/
 package csv
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
-	"reflect"
-	"strconv"
-	"time"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sync"
 
-	"github.com/pkg/errors"
+	zl "github.com/rs/zerolog"
 )
 
 const (
-	defaultDateFormat = time.RFC3339
+	Comma = ','
+	Tab   = '\t'
 )
 
-type Decoder struct {
-	reader     *csv.Reader
-	hasHeader  bool
-	dateFormat string
+func StreamCSV(reader io.Reader, header bool, logger *zl.Logger) (<-chan []string, error) {
+	return Stream(reader, header, Comma, logger)
 }
 
-func NewDecoder(reader *csv.Reader) *Decoder {
-	return &Decoder{
-		reader:     reader,
-		hasHeader:  false,
-		dateFormat: defaultDateFormat,
-	}
+func StreamTSV(reader io.Reader, header bool, logger *zl.Logger) (<-chan []string, error) {
+	return Stream(reader, header, Tab, logger)
 }
 
-func (t *Decoder) HasHeader() {
-	t.hasHeader = true
-}
+// Stream streams a csv file row by row attempts to close the reader if possible
+func Stream(reader io.Reader, header bool, terminator rune, logger *zl.Logger) (<-chan []string, error) {
+	out := make(chan []string)
 
-func (t *Decoder) SetDateFormat(format string) {
-	t.dateFormat = format
-}
-
-func (t *Decoder) Decode(rows interface{}) error {
-
-	for i := 1; ; {
-		row, err := t.reader.Read()
-		if err == io.EOF {
-			break
+	go func() {
+		defer close(out)
+		if rr, ok := reader.(io.ReadCloser); ok {
+			defer rr.Close()
 		}
 
-		if err != nil {
-			return err
-		}
+		r := csv.NewReader(reader)
+		r.Comma = terminator
 
-		if t.hasHeader && i == 1 {
-			continue
-		}
+		for i := 0; ; i++ {
+			row, err := r.Read()
+			if err == io.EOF {
+				break
+			}
 
-		if err := t.parseRow(rows, row); err != nil {
-			return errors.Wrapf(err, "error parsing row %d", i)
-		}
-	}
-
-	return nil
-}
-
-func (t *Decoder) parseRow(arrPtr interface{}, row []string) error {
-
-	typ := reflect.TypeOf(arrPtr).Elem().Elem()
-	v := reflect.New(typ).Elem()
-
-	arr := reflect.ValueOf(arrPtr).Elem()
-
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-
-		switch field.Type.Name() {
-
-		case "bool":
-			b, err := strconv.ParseBool(row[i])
 			if err != nil {
-				return errors.Wrapf(err, "invalid string float %v", v)
+				logger.Error().
+					Int("line", i).
+					Err(err).
+					Strs("rows", row).
+					Msg("failed reading line")
+				continue
 			}
 
-			v.Field(i).SetBool(b)
-
-		case "float64":
-			f, err := strconv.ParseFloat(row[i], 64)
-			if err != nil {
-				return errors.Wrapf(err, "invalid string float %v", v)
+			if header && i == 0 {
+				continue
 			}
 
-			v.Field(i).SetFloat(f)
-
-		case "string":
-			v.Field(i).SetString(row[i])
-
-		case "int64":
-			n, err := strconv.ParseInt(row[i], 10, 64)
-			if err != nil {
-				return errors.Wrapf(err, "invalid string int %v", v)
-			}
-
-			v.Field(i).SetInt(n)
-
-		case "Time":
-			format := field.Tag.Get("csv")
-			if format == "" {
-				format = t.dateFormat
-			}
-
-			date, err := time.Parse(format, row[i])
-			if err != nil {
-				return errors.Wrapf(err, "invalid string date %v", v)
-			}
-
-			v.Field(i).Set(reflect.ValueOf(date))
-
-		default:
-			fmt.Println("None", field, field.Type.Name())
-
+			out <- row
 		}
+	}()
+
+	return out, nil
+}
+
+func StreamDirectory(path string, header bool, logger *zl.Logger) (<-chan []string, error) {
+
+	out := make(chan []string)
+
+	files, err := WalkDirectory(path, logger)
+	if err != nil {
+		return nil, err
 	}
 
-	arr.Set(reflect.Append(arr, v))
+	var wg sync.WaitGroup
 
-	return nil
+	go func() {
+		defer close(out)
+
+		for file := range files {
+			f, err := os.Open(file)
+			if err != nil {
+				logger.Error().
+					Err(err).
+					Str("file", file).
+					Msg("failed opening file")
+				continue
+			}
+
+			wg.Add(1)
+			go func(filename string) {
+				defer wg.Done()
+
+				ch, err := Stream(f, header, Comma, logger)
+				if err != nil {
+					logger.Error().
+						Err(err).
+						Str("file", filename).
+						Msg("failed streaming file")
+					return
+				}
+
+				for r := range ch {
+					out <- r
+				}
+			}(file)
+		}
+	}()
+
+	return out, nil
+}
+
+// WalkDirectory looking for CSV files as defined by IsCSV function.
+// Use WalkDirectoryFilter if you need to specify a custom extension.
+func WalkDirectory(directory string, logger *zl.Logger) (<-chan string, error) {
+	return WalkDirectoryFilter(directory, IsCSV, logger)
+}
+
+// FilterFunc
+type FilterFunc func(string) bool
+
+// WalkDirectoryFilter walks directory looking for files that match the FilterFunc
+func WalkDirectoryFilter(directory string, filter FilterFunc, logger *zl.Logger) (<-chan string, error) {
+
+	out := make(chan string)
+
+	go func() {
+		defer close(out)
+
+		if err := filepath.WalkDir(directory, func(filename string, d fs.DirEntry, err error) error {
+
+			if d.IsDir() {
+				return nil
+			}
+
+			if !filter(filename) {
+				return nil
+			}
+
+			out <- filename
+
+			return nil
+
+		}); err != nil {
+			logger.Error().
+				Err(err).
+				Str("directory", directory).
+				Msg("failed walking CSVs")
+		}
+
+	}()
+
+	return out, nil
+}
+
+// IsCSV FilterFunc implementation
+func IsCSV(filename string) bool {
+	ext := filepath.Ext(filename)
+	if ext != ".txt" && ext != ".csv" {
+		return false
+	}
+	return true
+
+}
+
+// IsTSV FilterFunc implementation
+func IsTSV(filename string) bool {
+	ext := filepath.Ext(filename)
+	if ext != ".txt" && ext != ".tsv" {
+		return false
+	}
+	return true
+
 }

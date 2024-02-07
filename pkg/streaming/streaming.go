@@ -46,7 +46,37 @@ func Morph[I any, O any](done <-chan struct{}, ch <-chan I, fn func(I) (O, error
 	return out
 }
 
-func Merge[T any](done <-chan struct{}, ch ...<-chan T) <-chan T {
+func Merge[T any](in ...<-chan T) <-chan T {
+	var wg sync.WaitGroup
+	out := make(chan T)
+
+	fn := func(ch <-chan T) {
+		for v := range ch {
+			out <- v
+		}
+		wg.Done()
+	}
+
+	// Start a Goroutine for each input channel to forward values to the output channel.
+	for _, ch := range in {
+		if ch == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go fn(ch)
+	}
+
+	// Start a Goroutine to close the output channel when all input channels are closed.
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	return out
+}
+
+func MergeDone[T any](done <-chan struct{}, ch ...<-chan T) <-chan T {
 	out := make(chan T)
 
 	var wg sync.WaitGroup
@@ -154,4 +184,33 @@ func Done(in ...<-chan struct{}) <-chan struct{} {
 	}()
 
 	return orDone
+}
+
+func AllDone(in ...<-chan struct{}) <-chan struct{} {
+	var wg sync.WaitGroup
+
+	// Create a channel to signal when all input channels are closed
+	done := make(chan struct{})
+
+	// Function to wait for a single channel to be closed
+	fn := func(ch <-chan struct{}) {
+		defer wg.Done()
+		for range ch {
+			// Do nothing, just consume values until the channel is closed
+		}
+	}
+
+	// Start a goroutine for each input channel
+	for _, ch := range in {
+		wg.Add(1)
+		go fn(ch)
+	}
+
+	// Start a goroutine to close the 'done' channel when all input channels are closed
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	return done
 }

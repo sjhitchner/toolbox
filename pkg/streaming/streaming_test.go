@@ -82,7 +82,7 @@ func (s *StreamingSuite) Test_Merge(c *C) {
 	in1 := Generate(done, 1, 2, 3)
 	in2 := Generate(done, 4, 5, 6)
 
-	out := Merge[int](done, in1, in2)
+	out := MergeDone[int](done, in1, in2)
 
 	var index int
 	for _ = range out {
@@ -98,7 +98,7 @@ func (s *StreamingSuite) Test_Merge_Done(c *C) {
 	in1 := Generate(nil, 1, 2, 3)
 	in2 := Generate(nil, 4, 5, 6)
 
-	out := Merge[int](done, in1, in2)
+	out := MergeDone[int](done, in1, in2)
 
 	close(done)
 

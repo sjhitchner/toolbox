@@ -95,7 +95,7 @@ func (t *Kinesis[T]) Consume() (<-chan T, error) {
 		shardStreams = append(shardStreams, ch)
 	}
 
-	out := streaming.Merge[T](t.done, shardStreams...)
+	out := streaming.MergeDone[T](t.done, shardStreams...)
 
 	return out, nil
 }

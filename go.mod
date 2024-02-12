@@ -1,7 +1,7 @@
 module github.com/sjhitchner/toolbox
 
 require (
-	github.com/aws/aws-sdk-go v1.44.85
+	github.com/aws/aws-sdk-go v1.50.15
 	github.com/aws/aws-sdk-go-v2 v1.24.1
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.15.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.1

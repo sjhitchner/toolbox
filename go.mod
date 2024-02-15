@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.1
 	github.com/graph-gophers/graphql-go v0.0.0-20190214043811-70e684c13100
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/lib/pq v1.3.0
+	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.9.0
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
 	github.com/pkg/errors v0.9.1

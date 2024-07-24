@@ -81,8 +81,11 @@ type FileLoader[T any] struct {
 	path string
 }
 
-func (t *FileLoader[T]) List(start time.Time) (<-chan string, <-chan error) {
-	path := filepath.Join(t.path, start.Format(FileDateFormat))
+func (t *FileLoader[T]) List(start *time.Time) (<-chan string, <-chan error) {
+	path := t.path
+	if start != nil {
+		path = filepath.Join(t.path, start.Format(FileDateFormat))
+	}
 	return files.FindFiles(path), nil
 }
 

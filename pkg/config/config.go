@@ -81,3 +81,14 @@ func NewInvalidParamError(provider, key string, err error) *InvalidParamError {
 func (t InvalidParamError) Error() string {
 	return fmt.Sprintf("%s (%s) key invalid %s", t.Key, t.Provider, t.Err.Error())
 }
+
+
+
+Thai Elephant Dung
+Stargazer Cubensis
+PE7 Isolated
+Jedi Mind Fuck
+Jack Frost
+Hillbilly
+White Rabbit
+Tosohatchee

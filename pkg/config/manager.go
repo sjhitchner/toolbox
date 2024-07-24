@@ -12,17 +12,39 @@ type Manager struct {
 }
 
 func New() *Manager {
-	return &Manager{}
+	return &Manager{
+		sources: make(Sources, 0, 5),
+		done:    make(chan struct{}),
+	}
 }
 
 func (t *Manager) AddProvider(provider Provider, priority int, interval time.Duration) {
-	t.sources = append(t.sources, Source{
+	source := Source{
 		Provider: provider,
 		Interval: interval,
 		Priority: priority,
-	})
+	}
+	go t.startUpdate(source)
+	t.sources = append(t.sources, source)
 }
 
+func (t *Manager) startUpdate(source Source) {
+	// TODO Error handling
+	source.Provider.Update()
+
+	for {
+		select {
+		case <-t.done:
+			// TODO log
+			return
+		case <-time.After(source.Interval):
+		}
+
+		source.Provider.Update()
+	}
+}
+
+/*
 func (t *Manager) Start() error {
 	sort.Sort(t.sources)
 
@@ -49,6 +71,7 @@ func (t *Manager) startSourceUpdate(source Source) {
 		source.Provider.Update()
 	}
 }
+*/
 
 func (t Manager) GetInt(key string, dflt int) int {
 	val, err := t.context.GetInt(key)

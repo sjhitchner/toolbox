@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path/filepath"
+	"net/url"
 	"strings"
 	"time"
 
@@ -13,26 +13,24 @@ import (
 )
 
 type File[T any] struct {
-	prefix string
-	part   int
-	Buf    *bytes.Buffer
-	enc    *json.Encoder
-	Count  int
+	part  int
+	Buf   *bytes.Buffer
+	enc   *json.Encoder
+	Count int
 }
 
-func NewFile[T any](prefix string, part int) File[T] {
+func NewFile[T any](part int) File[T] {
 	buf := &bytes.Buffer{}
 	return File[T]{
-		prefix: prefix,
-		part:   part,
-		Buf:    buf,
-		enc:    json.NewEncoder(buf),
-		Count:  0,
+		part:  part,
+		Buf:   buf,
+		enc:   json.NewEncoder(buf),
+		Count: 0,
 	}
 }
 
 func (t File[T]) Key() string {
-	return filepath.Join(t.prefix, fmt.Sprintf("%04d.json", t.part))
+	return fmt.Sprintf("%04d.json", t.part)
 }
 
 func (t *File[T]) Add(obj T) error {
@@ -48,8 +46,13 @@ type Saver[T any] interface {
 }
 
 type Loader[T any] interface {
-	List(start time.Time) (<-chan string, <-chan error)
+	List(start *time.Time) (<-chan string, <-chan error)
 	Load(path string) (io.ReadCloser, error)
+}
+
+type Archiver[T any] interface {
+	Archive(start time.Time, ch <-chan T) <-chan error
+	Retrieve(from *time.Time) (<-chan T, <-chan error, error)
 }
 
 type BaseArchiver[T any] struct {
@@ -58,19 +61,14 @@ type BaseArchiver[T any] struct {
 	bufSize int
 }
 
-func (t *BaseArchiver[T]) Archive(start time.Time, toAdd <-chan T, toDelete <-chan T) <-chan error {
-
-	addCh, addErrs := t.startArchiver("add", toAdd)
-	deleteCh, deleteErrs := t.startArchiver("delete", toDelete)
-
-	uploadCh := streaming.Merge[File[T]](addCh, deleteCh)
+func (t *BaseArchiver[T]) Archive(start time.Time, in <-chan T) <-chan error {
+	uploadCh, addErrs := t.startArchiver(in)
 	errUploads := t.saver.Save(start, uploadCh)
-
-	errCh := streaming.Merge[error](addErrs, deleteErrs, errUploads)
+	errCh := streaming.Merge[error](addErrs, errUploads)
 	return errCh
 }
 
-func (t *BaseArchiver[T]) startArchiver(prefix string, in <-chan T) (<-chan File[T], <-chan error) {
+func (t *BaseArchiver[T]) startArchiver(in <-chan T) (<-chan File[T], <-chan error) {
 	out := make(chan File[T])
 	errCh := make(chan error)
 
@@ -80,7 +78,7 @@ func (t *BaseArchiver[T]) startArchiver(prefix string, in <-chan T) (<-chan File
 
 		var part int
 
-		file := NewFile[T](prefix, part)
+		file := NewFile[T](part)
 
 		for record := range in {
 			if err := file.Add(record); err != nil {
@@ -91,7 +89,7 @@ func (t *BaseArchiver[T]) startArchiver(prefix string, in <-chan T) (<-chan File
 			if file.Count >= t.bufSize {
 				out <- file
 				part++
-				file = NewFile[T](prefix, part)
+				file = NewFile[T](part)
 			}
 		}
 		out <- file
@@ -100,36 +98,24 @@ func (t *BaseArchiver[T]) startArchiver(prefix string, in <-chan T) (<-chan File
 	return out, errCh
 }
 
-func (t *BaseArchiver[T]) Retrieve(from time.Time) (<-chan T, <-chan T, <-chan error, error) {
-	toAdd := make(chan T)
-	toDelete := make(chan T)
+func (t *BaseArchiver[T]) Retrieve(from *time.Time) (<-chan T, <-chan error, error) {
+	out := make(chan T)
 	errCh := make(chan error)
 
 	filesCh, errListCh := t.loader.List(from)
 
 	go func() {
-		defer close(toAdd)
-		defer close(toDelete)
+		defer close(out)
 		defer close(errCh)
 
 		for file := range filesCh {
-			if strings.HasSuffix(filepath.Dir(file), "add") {
-				if err := t.retrieve(file, toAdd, errCh); err != nil {
-					errCh <- err
-				}
-
-			} else if strings.HasSuffix(filepath.Dir(file), "delete") {
-				if err := t.retrieve(file, toDelete, errCh); err != nil {
-					errCh <- err
-				}
-
-			} else {
-				errCh <- fmt.Errorf("invalid file type: %s", file)
+			if err := t.retrieve(file, out, errCh); err != nil {
+				errCh <- err
 			}
 		}
 	}()
 
-	return toAdd, toDelete, streaming.Merge[error](errCh, errListCh), nil
+	return out, streaming.Merge[error](errCh, errListCh), nil
 }
 
 func (t *BaseArchiver[T]) retrieve(filename string, out chan<- T, errCh chan<- error) error {
@@ -153,4 +139,22 @@ func (t *BaseArchiver[T]) retrieve(filename string, out chan<- T, errCh chan<- e
 	}
 
 	return nil
+}
+
+func NewArchiver[T any](path, dataType string, bufSize int) (Archiver[T], error) {
+	if strings.HasPrefix(path, "s3://") {
+		u, err := url.Parse(path)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid S3 Path %+v", err)
+		}
+
+		s3Client, err := GetS3Client()
+		if err != nil {
+			return nil, err
+		}
+
+		return NewS3Archiver[T](s3Client, u.Host, u.Path[1:], dataType, bufSize)
+	}
+
+	return NewFileArchiver[T](path, dataType, bufSize)
 }

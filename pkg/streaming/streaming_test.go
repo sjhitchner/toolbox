@@ -118,7 +118,7 @@ func (s *StreamingSuite) Test_Multiplex(c *C) {
 
 	var wg sync.WaitGroup
 
-	Multiplex[int](done, source, out1, out2)
+	Demultiplex[int](done, source, out1, out2)
 
 	read := func(ch <-chan int) {
 		defer wg.Done()
@@ -147,13 +147,15 @@ func (s *StreamingSuite) Test_Multiplex_Done(c *C) {
 
 	var wg sync.WaitGroup
 
-	Multiplex[int](done, source, out1, out2)
+	Demultiplex[int](done, source, out1, out2)
 
 	read := func(ch <-chan int) {
 		defer wg.Done()
 
-		for _ = range ch {
-			c.Fail()
+		index := 1
+		for v := range ch {
+			c.Assert(v, Equals, index)
+			index++
 		}
 	}
 
@@ -212,4 +214,26 @@ func (s *StreamingSuite) Test_Or(c *C) {
 		nil,
 		sig(100*time.Millisecond),
 	)
+}
+
+func (s *StreamingSuite) Test_FanOut(c *C) {
+	done := make(chan struct{})
+
+	gen := Generate[int](done, 1, 2, 3, 4, 5)
+
+	streams := FanOut[int](gen, 3)
+
+	fn := func(ch chan int) {
+		c.Assert(<-ch, Equals, 1)
+		c.Assert(<-ch, Equals, 2)
+		c.Assert(<-ch, Equals, 3)
+		c.Assert(<-ch, Equals, 4)
+		c.Assert(<-ch, Equals, 5)
+	}
+
+	for _, ch := range streams {
+		go fn(ch)
+	}
+
+	close(done)
 }

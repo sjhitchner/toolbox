@@ -2,11 +2,13 @@ package archiver
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog/log"
@@ -16,7 +18,10 @@ const (
 	S3DateFormat = "2006/01/02"
 )
 
-func NewS3Archiver[T any](client *s3.Client, bucket, path string, bufSize int) (*BaseArchiver[T], error) {
+func NewS3Archiver[T any](client *s3.Client, bucket, basePath, dataType string, bufSize int) (*BaseArchiver[T], error) {
+
+	path := filepath.Join(basePath, dataType)
+
 	return &BaseArchiver[T]{
 		bufSize: bufSize,
 		saver: &S3Saver[T]{
@@ -48,7 +53,7 @@ func (t *S3Saver[T]) Save(start time.Time, uploads <-chan File[T]) <-chan error 
 		uploader := manager.NewUploader(t.client)
 
 		for file := range uploads {
-			key := path.Join(t.path, start.Format(S3DateFormat), file.Key())
+			key := filepath.Join(t.path, start.Format(S3DateFormat), file.Key())
 
 			input := &s3.PutObjectInput{
 				Bucket: aws.String(t.bucket),
@@ -62,15 +67,23 @@ func (t *S3Saver[T]) Save(start time.Time, uploads <-chan File[T]) <-chan error 
 				Msg("Started uploading archive to S3")
 
 			ctx := context.Background()
-			_, err := uploader.Upload(ctx, input)
+			result, err := uploader.Upload(ctx, input)
 			if err != nil {
 				errCh <- err
+				log.Err(err).
+					Str("key", key).
+					Str("bucket", t.bucket).
+					Msg("Error uploading archive to S3")
+				continue
 			}
 
 			log.Info().
 				Str("key", key).
 				Str("bucket", t.bucket).
+				Str("etag", *result.ETag).
+				Str("location", result.Location).
 				Msg("Finished uploading archive to S3")
+			continue
 		}
 	}()
 
@@ -83,9 +96,12 @@ type S3Loader[T any] struct {
 	path   string
 }
 
-func (t *S3Loader[T]) List(start time.Time) (<-chan string, <-chan error) {
+func (t *S3Loader[T]) List(start *time.Time) (<-chan string, <-chan error) {
 
-	path := path.Join(t.path, start.Format(S3DateFormat))
+	path := t.path
+	if start != nil {
+		path = filepath.Join(t.path, start.Format(S3DateFormat))
+	}
 
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(t.bucket),
@@ -145,4 +161,14 @@ func (t *S3Loader[T]) Load(path string) (io.ReadCloser, error) {
 
 	//defer output.Body.Close()
 	return output.Body, nil
+}
+
+func GetS3Client() (*s3.Client, error) {
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Error loading AWS SDK config: %v", err)
+	}
+
+	return s3.NewFromConfig(cfg), nil
 }

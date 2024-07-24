@@ -1,6 +1,7 @@
 package streaming
 
 import (
+	"log"
 	"sync"
 )
 
@@ -106,7 +107,7 @@ func MergeDone[T any](done <-chan struct{}, ch ...<-chan T) <-chan T {
 	return out
 }
 
-func Multiplex[T any](done <-chan struct{}, in <-chan T, ch ...chan<- T) {
+func Demultiplex[T any](done <-chan struct{}, in <-chan T, ch ...chan<- T) {
 
 	var wg sync.WaitGroup
 
@@ -213,4 +214,60 @@ func AllDone(in ...<-chan struct{}) <-chan struct{} {
 	}()
 
 	return done
+}
+
+func FanOut[T any](in <-chan T, num int) []chan T {
+
+	streams := make([]chan T, num)
+	for i := range streams {
+		streams[i] = make(chan T)
+	}
+
+	go func() {
+		defer func() {
+			for i := range streams {
+				close(streams[i])
+			}
+		}()
+
+		for val := range in {
+			for _, ch := range streams {
+				ch <- val
+			}
+		}
+	}()
+
+	return streams
+}
+
+func Consume[T any](in <-chan T) {
+	for _ = range in {
+	}
+}
+
+func Gather[T any](in <-chan T) []T {
+	arr := make([]T, 0, 10)
+	for val := range in {
+		arr = append(arr, val)
+	}
+	return arr
+}
+
+func Error(in <-chan error) error {
+	for err := range in {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ErrorLog(in <-chan error) {
+	go func() {
+		for err := range in {
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}()
 }

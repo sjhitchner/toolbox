@@ -2,7 +2,6 @@ package sqs
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -98,7 +97,10 @@ func (t *SQSClient[T]) receive(ctx context.Context) ([]types.Message, error) {
 	resp, err := t.client.ReceiveMessage(ctx, &request)
 	if err != nil {
 		errCounter.Incr()
-		return nil, fmt.Errorf("Error receiving messages: %v", err)
+		return nil, &Error{
+			Type: ReceiveError,
+			Err:  err,
+		}
 	}
 
 	counter.IncrBy(len(resp.Messages))

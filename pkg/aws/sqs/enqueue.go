@@ -68,7 +68,10 @@ func (t *SQSClient[T]) send(ctx context.Context, message string) error {
 	_, err := t.client.SendMessage(ctx, &request)
 	if err != nil {
 		errCounter.Incr()
-		return err
+		return &Error{
+			Type: SendError,
+			Err:  err,
+		}
 	}
 
 	fmt.Println("sent")

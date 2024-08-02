@@ -11,11 +11,14 @@ type ErrorType int
 const (
 	UnmarshalError ErrorType = iota
 	MarshalError
+	ReceiveError
+	SendError
 )
 
 type Error struct {
-	Msg types.Message
-	Err error
+	Type ErrorType
+	Msg  types.Message
+	Err  error
 }
 
 func (t Error) Error() string {
@@ -46,7 +49,11 @@ func (t JSONSerializer[T]) Unmarshal(in <-chan types.Message) (<-chan Message[T]
 		for msg := range in {
 			var obj T
 			if err := json.Unmarshal([]byte(*msg.Body), &obj); err != nil {
-				errCh <- err
+				errCh <- &Error{
+					Type: UnmarshalError,
+					Msg:  msg,
+					Err:  err,
+				}
 			}
 
 			outCh <- Message[T]{
@@ -69,7 +76,10 @@ func (t JSONSerializer[T]) Marshal(in <-chan T) (<-chan string, <-chan error) {
 		for obj := range in {
 			b, err := json.Marshal(obj)
 			if err != nil {
-				errCh <- err
+				errCh <- &Error{
+					Type: MarshalError,
+					Err:  err,
+				}
 			}
 			outCh <- string(b)
 		}

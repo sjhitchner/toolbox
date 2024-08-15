@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	zl "github.com/rs/zerolog"
+	"github.com/sjhitchner/toolbox/pkg/streaming"
 )
 
 // PipelineFunc process a row to add information based on filename
@@ -181,7 +182,14 @@ func (t *S3Reader) download(bucket, file string, header bool) (<-chan []string, 
 		return nil, err
 	}
 
-	return Stream(bytes.NewReader(writer.Bytes()), header, t.terminator, &t.logger)
+	reader := NewReader(bytes.NewReader(writer.Bytes()))
+	reader.Comma = t.terminator
+
+	outCh, errCh, err := Stream[[]string](reader, header)
+	if err != nil {
+		return nil, err
+	}
+	return outCh, streaming.Error(errCh)
 }
 
 func ParseS3Path(s3Path string) (string, string, error) {

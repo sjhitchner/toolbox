@@ -15,7 +15,7 @@ type DatadogBackend struct {
 	client *statsd.Client
 }
 
-func NewDatadogBackend(hostname, namespace string, tags ...string) (*DatadogBackend, error) {
+func New(hostname, namespace string, tags ...string) (*DatadogBackend, error) {
 	client, err := statsd.New(hostname,
 		statsd.WithNamespace(namespace),
 		statsd.WithTags(tags),

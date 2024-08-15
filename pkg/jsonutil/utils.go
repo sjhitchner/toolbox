@@ -7,19 +7,19 @@ import (
 )
 
 func ToChannel[T any](filename string) (<-chan T, <-chan error, error) {
-
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer file.Close()
 
 	decoder := json.NewDecoder(file)
 
-	out := make(chan T)
+	outCh := make(chan T)
 	errCh := make(chan error)
 	go func() {
-		defer close(out)
+		defer file.Close()
+		defer close(outCh)
+		defer close(errCh)
 
 		for i := 1; ; i++ {
 			var obj T
@@ -33,10 +33,10 @@ func ToChannel[T any](filename string) (<-chan T, <-chan error, error) {
 				errCh <- err
 			}
 
-			out <- obj
+			outCh <- obj
 		}
 	}()
-	return out, nil, nil
+	return outCh, errCh, nil
 }
 
 func ToList[T any](filename string) ([]T, error) {

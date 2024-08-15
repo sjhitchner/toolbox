@@ -3,6 +3,7 @@ module github.com/sjhitchner/toolbox
 go 1.22
 
 require (
+	github.com/DataDog/datadog-go v4.8.3+incompatible
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.30.4-0.20240730182811-0c73d2b5dab5
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
@@ -10,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.2
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.3
 	github.com/graph-gophers/graphql-go v1.5.0
+	github.com/iancoleman/strcase v0.3.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -28,6 +30,7 @@ require (
 	cloud.google.com/go/auth v0.7.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
+	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.27 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.11 // indirect

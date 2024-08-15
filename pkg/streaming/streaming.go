@@ -326,12 +326,18 @@ func ErrorLog(in <-chan error) {
 	}()
 }
 
-func Copy[T any](wg *sync.WaitGroup, out chan<- T, in <-chan T) {
+func Copy[T any](out chan<- T, in <-chan T) {
+	go func() {
+		for v := range in {
+			out <- v
+		}
+	}()
+}
+
+func CopyWG[T any](wg *sync.WaitGroup, out chan<- T, in <-chan T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(out)
-
 		for v := range in {
 			out <- v
 		}

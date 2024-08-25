@@ -1,7 +1,43 @@
+/*
+Primatives to help easy generate consistent GraphViz diagrams
+
+# Library is not thread-safe
+
+For images you need to define a set of ImageTypes using the ImageType type and a custom ImageMapper function that maps the ImageType to file path.  If the Graph has the ShowLegend set a legend will automatically be added with all the images used by that graph.
+
+	const (
+		None gv.ImageType = iota
+		RDS
+		S3
+		SNS
+		SQS
+	)
+
+	func CustomImageMapper(id string, imageType ImageType) Image {
+		switch imageType {
+			case RDS:
+				return Image{Label: "RDS", Path: "images/rds.png"}
+			case S3:
+				return Image{Label: "S3", Path: "images/s3.png"}
+			case SNS:
+				return Image{Label: "SNS", Path: "images/sns.png"}
+			case SQS:
+				return Image{Label: "SQS", Path: "images/sqs.png"}
+			default:
+				panic("Invalid ImageType")
+		}
+	}
+
+	SetImageMapper(CustomImageMapper)
+*/
 package graphviz
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"sort"
 	"strings"
 )
@@ -11,39 +47,18 @@ const Tab = "  "
 type Direction string
 
 const (
-	Forward Direction = "forward"
-	Both              = "both"
+	DirForward Direction = "forward"
+	DirBoth              = "both"
+	DirBack              = "back"
 )
 
 type ImageType int
 
-const (
-	None ImageType = iota
-	Athena
-	DynamoDB
-	ElasticBeanstalk
-	Firehose
-	Flink
-	Kinesis
-	Lambda
-	LoadBalancer
-	RDS
-	S3
-	SNS
-	SQS
-	Question
-	BiqQuery
-	Cloud
-	Coralogix
-	Datadog
-	Redis
-)
+var legendCh chan Image
 
-var legendCh chan Legend
-
-type Legend struct {
+type Image struct {
 	Label string
-	Image string
+	Path  string
 }
 
 func Prefix(prefix, id string) string {
@@ -78,65 +93,36 @@ func Attributes(m map[string]interface{}, attrs ...string) string {
 	return "[" + strings.Join(attrs, ",") + "]"
 }
 
-func Image(id string, image ImageType) string {
-	if strings.Contains(id, "aws") {
-		awsMap := map[ImageType]Legend{
-			Athena:           {Label: "Athena", Image: "icons/aws/athena.png"},
-			DynamoDB:         {Label: "DynamoDB", Image: "icons/aws/dynamodb.png"},
-			ElasticBeanstalk: {Label: "Elastic Beanstalk", Image: "icons/aws/eb.png"},
-			Firehose:         {Label: "Firehose", Image: "icons/aws/firehose.png"},
-			Flink:            {Label: "Flink", Image: "icons/aws/flink.png"},
-			Kinesis:          {Label: "Kinesis", Image: "icons/aws/kinesis.png"},
-			Lambda:           {Label: "Lambda", Image: "icons/aws/lambda.png"},
-			LoadBalancer:     {Label: "Load Balancer", Image: "icons/aws/lb.png"},
-			RDS:              {Label: "RDS", Image: "icons/aws/rds.png"},
-			S3:               {Label: "S3", Image: "icons/aws/s3.png"},
-			SNS:              {Label: "SNS", Image: "icons/aws/sns.png"},
-			SQS:              {Label: "SQS", Image: "icons/aws/sqs.png"},
-			Question:         {Label: "Question", Image: "icons/question.png"},
-			BiqQuery:         {Label: "BiqQuery", Image: "icons/aws/bigquery.png"},
-			Cloud:            {Label: "Cloud", Image: "icons/cloud.png"},
-			Coralogix:        {Label: "Coralogix", Image: "icons/coralogix.svg"},
-			Datadog:          {Label: "Datadog", Image: "icons/datadog.png"},
-			Redis:            {Label: "Redis", Image: "icons/redis.png"},
-		}
-		legend := awsMap[image]
-		legendCh <- legend
-		return legend.Image
-	}
+// ImageMapFn
+// id is the ID of the node the image will be placed
+// imageType is the type of image you will be placing
+type ImageMapFn func(id string, imageType ImageType) Image
 
-	gcpMap := map[ImageType]Legend{
-		Athena:       {Label: "Athena", Image: "icons/gcp/bigquery.png"},
-		DynamoDB:     {Label: "Big Table", Image: "icons/gcp/bigtable.png"},
-		Firehose:     {Label: "Pub Sub", Image: "icons/gcp/pubsub.png"},
-		Flink:        {Label: "Flink", Image: "icons/gcp/flink.png"},
-		Kinesis:      {Label: "Pub Sub", Image: "icons/gcp/pubsub.png"},
-		Lambda:       {Label: "Cloud Functions", Image: "icons/gcp/func.png"},
-		LoadBalancer: {Label: "Load Balancer", Image: "icons/gcp/lb.png"},
-		RDS:          {Label: "Big Table", Image: "icons/gcp/bigtable.png"},
-		S3:           {Label: "GCS", Image: "icons/gcp/gcs.png"},
-		SNS:          {Label: "SNS", Image: "icons/gcp/sns.png"},
-		SQS:          {Label: "Pub Sub", Image: "icons/gcp/pubsub.png"},
-		Question:     {Label: "TBD", Image: "icons/question.png"},
-		BiqQuery:     {Label: "Biq Query", Image: "icons/gcp/bigquery.png"},
-		Cloud:        {Label: "Cloud", Image: "icons/cloud.png"},
-		Coralogix:    {Label: "Coralogix", Image: "icons/coralogix.svg"},
-		Datadog:      {Label: "Datadog", Image: "icons/datadog.png"},
-		Redis:        {Label: "Redis", Image: "icons/redis.png"},
-	}
-	legend := gcpMap[image]
-	legendCh <- legend
-	return legend.Image
-
+var imageMapFn = func(id string, imageType ImageType) Image {
+	return Image{}
 }
 
-func OrderLegend(in <-chan Legend) <-chan Legend {
-	out := make(chan Legend)
+// SetImageMapper
+// set a custom image mapper function
+func SetImageMapper(fn ImageMapFn) {
+	imageMapFn = fn
+}
+
+func ImageMapper(id string, imageType ImageType) string {
+	image := imageMapFn(id, imageType)
+	go func() {
+		legendCh <- image
+	}()
+	return image.Path
+}
+
+func OrderLegend(in <-chan Image) <-chan Image {
+	out := make(chan Image)
 	go func() {
 		defer close(out)
 
 		// Collect all legends from the input channel
-		var legends []Legend
+		var legends []Image
 		for legend := range in {
 			legends = append(legends, legend)
 		}
@@ -156,4 +142,53 @@ func OrderLegend(in <-chan Legend) <-chan Legend {
 		}
 	}()
 	return out
+}
+
+// Writes the Graphviz dot representation of the graph to the specified file
+func (t Graph) WriteDotFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	return t.WriteDot(file)
+}
+
+func (t Graph) WriteDot(writer io.Writer) error {
+	if _, err := io.WriteString(writer, t.Dot()); err != nil {
+		return fmt.Errorf("error writing to file: %v", err)
+	}
+	return nil
+}
+
+// Generates an SVG from the dot file using the dot binary
+func (t Graph) WriteSVGFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	return t.WriteSVG(file)
+}
+
+func (t Graph) WriteSVG(writer io.Writer) error {
+	cmd := exec.Command("dot", "-Tsvg")
+	cmd.Stdin = strings.NewReader(t.Dot())
+
+	out := &bytes.Buffer{}
+	cmd.Stdout = out
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error running dot command: %v", err)
+	}
+
+	_, err = io.Copy(writer, out)
+	if err != nil {
+		return fmt.Errorf("error copying SVG output: %v", err)
+	}
+
+	return nil
 }

@@ -3,6 +3,7 @@ package sqs
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sjhitchner/toolbox/pkg/metrics"
 
@@ -12,13 +13,13 @@ import (
 )
 
 type SQSClient[T any] struct {
-	client     *sqs.Client
-	queueURL   string
-	BufferSize int
-	BatchSize  int32
-	// messageCh chan types.Message
-	doneCh     <-chan struct{}
-	serializer Serializer[T]
+	client       *sqs.Client
+	queueURL     string
+	BufferSize   int
+	BatchSize    int
+	BatchTimeout time.Duration
+	doneCh       <-chan struct{}
+	serializer   Serializer[T]
 }
 
 func New[T any](done <-chan struct{}, cfg aws.Config, serializer Serializer[T], queueURL string) (*SQSClient[T], error) {

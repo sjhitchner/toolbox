@@ -61,27 +61,39 @@ func (t Subgraph) Dot(indent int, prefix string) string {
 	return sb.String()
 }
 
-func (t *Subgraph) AddNode(node ...*Node) {
+func (t *Subgraph) AddNode(node ...*Node) *Subgraph {
 	t.Nodes = append(t.Nodes, node...)
+	return t
 }
 
-func (t *Subgraph) AddSubgraph(subsg ...*Subgraph) {
+func (t *Subgraph) AddSubgraph(subsg ...*Subgraph) *Subgraph {
 	t.Subgraphs = append(t.Subgraphs, subsg...)
+	return t
 }
 
-func (t *Subgraph) Forward(from, to string) {
-	t.Connect(from, to, Forward)
+func (t *Subgraph) BiConnect(from string, tos ...string) *Subgraph {
+	for _, to := range tos {
+		t.connect(from, to, DirBoth)
+	}
+	return t
 }
 
-func (t *Subgraph) Connect(from, to string, dir Direction) {
+func (t *Subgraph) Connect(from string, tos ...string) *Subgraph {
+	for _, to := range tos {
+		t.connect(from, to, DirForward)
+	}
+	return t
+}
+
+func (t *Subgraph) connect(from, to string, dir Direction) *Subgraph {
 	fromNode, tail, err := t.findNodeByDotPath(from)
 	if err != nil {
-		panic(fmt.Errorf("error finding 'from' node: %v", err))
+		panic(fmt.Errorf("error finding from '%s' node: %v", from, err))
 	}
 
 	toNode, head, err := t.findNodeByDotPath(to)
 	if err != nil {
-		panic(fmt.Errorf("error finding 'to' node: %v", err))
+		panic(fmt.Errorf("error finding to '%s' node: %v", to, err))
 	}
 
 	edge := &Edge{
@@ -92,11 +104,15 @@ func (t *Subgraph) Connect(from, to string, dir Direction) {
 		Attributes: make(map[string]interface{}),
 	}
 
-	if dir == Both {
+	switch dir {
+	case DirBoth:
+		edge.Attributes["dir"] = "both"
+	case DirBack:
 		edge.Attributes["dir"] = "both"
 	}
 
 	t.Edges = append(t.Edges, edge)
+	return t
 }
 
 func (t *Subgraph) findNodeByDotPath(dotPath string) (string, string, error) {

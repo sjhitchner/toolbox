@@ -24,8 +24,8 @@ func (t Node) Dot(indent int, prefix string) string {
 	if t.Image > 0 {
 		attrs = append(attrs,
 			"shape=none",
-			"labelloc=b",
-			fmt.Sprintf("image=\"%s\"", Image(prefix, t.Image)),
+			"labelloc=m",
+			fmt.Sprintf("image=\"%s\"", ImageMapper(prefix, t.Image)),
 		)
 	}
 

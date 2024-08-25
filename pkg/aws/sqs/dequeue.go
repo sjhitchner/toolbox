@@ -90,7 +90,7 @@ func (t *SQSClient[T]) receive(ctx context.Context) ([]types.Message, error) {
 
 	request := sqs.ReceiveMessageInput{
 		QueueUrl:            &t.queueURL,
-		MaxNumberOfMessages: t.BatchSize,
+		MaxNumberOfMessages: int32(t.BatchSize),
 		WaitTimeSeconds:     10,
 	}
 

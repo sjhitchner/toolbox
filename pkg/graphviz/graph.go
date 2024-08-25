@@ -21,8 +21,14 @@ type Graph struct {
 	Subgraphs  []*Subgraph
 }
 
-func (t *Graph) AddSubgraph(sg *Subgraph) {
+func (t *Graph) AddNode(node ...*Node) *Graph {
+	t.Nodes = append(t.Nodes, node...)
+	return t
+}
+
+func (t *Graph) AddSubgraph(sg *Subgraph) *Graph {
 	t.Subgraphs = append(t.Subgraphs, sg)
+	return t
 }
 
 func (t Graph) String() string {
@@ -34,7 +40,7 @@ func (t Graph) String() string {
 }
 
 func (t Graph) Dot() string {
-	legendCh = make(chan Legend, 100)
+	legendCh = make(chan Image, 100)
 
 	var sb strings.Builder
 	if t.IsStrict {
@@ -93,7 +99,7 @@ func (t Graph) Dot() string {
 		sb.WriteString("      style=solid;\n")
 		sb.WriteString("      color=grey;\n")
 		for legend := range OrderLegend(legendCh) {
-			sb.WriteString(fmt.Sprintf("    Legend%s [label=\"%s\", shape=none, labelloc=b, image=\"%s\"];\n", strcase.ToCamel(legend.Label), legend.Label, legend.Image))
+			sb.WriteString(fmt.Sprintf("    Legend%s [label=\"%s\", shape=none, labelloc=b, image=\"%s\"];\n", strcase.ToCamel(legend.Label), legend.Label, legend.Path))
 		}
 		sb.WriteString("  };\n")
 	}
@@ -102,11 +108,7 @@ func (t Graph) Dot() string {
 	return sb.String()
 }
 
-func (t *Graph) Forward(from, to string) {
-	t.Connect(from, to, Forward)
-}
-
-func (t *Graph) Connect(from, to string, dir Direction) {
+func (t *Graph) Connect(from, to string, dir ...Direction) *Graph {
 	fromNode, tail, err := t.findNodeByDotPath(from)
 	if err != nil {
 		panic(fmt.Errorf("error finding 'from' node: %v", err))
@@ -125,11 +127,17 @@ func (t *Graph) Connect(from, to string, dir Direction) {
 		Attributes: make(map[string]interface{}),
 	}
 
-	if dir == Both {
-		edge.Attributes["dir"] = "both"
+	if len(dir) > 0 {
+		switch dir[0] {
+		case DirBoth:
+			edge.Attributes["dir"] = "both"
+		case DirBack:
+			edge.Attributes["dir"] = "both"
+		}
 	}
 
 	t.Edges = append(t.Edges, edge)
+	return t
 }
 
 func (t *Graph) findNodeByDotPath(dotPath string) (string, string, error) {

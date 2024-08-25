@@ -57,35 +57,35 @@ func (s *DotSuite) TearDownTest(c *check.C) {
 
 // Test case for successful connection
 func (s *DotSuite) TestConnectSuccess(c *check.C) {
-	s.subgraph.Forward("node1", "node2")
+	s.subgraph.Connect("node1", "node2")
 	fmt.Println(s.subgraph)
 	c.Assert(len(s.subgraph.Edges), check.Equals, 1)
 	c.Assert(s.subgraph.Edges[0].From, check.Equals, "node1")
 	c.Assert(s.subgraph.Edges[0].To, check.Equals, "node2")
 
-	s.subgraph.Forward("node1", "subgraph1.node3")
+	s.subgraph.Connect("node1", "subgraph1.node3")
 	c.Assert(len(s.subgraph.Edges), check.Equals, 2)
 	c.Assert(s.subgraph.Edges[1].From, check.Equals, "node1")
 	c.Assert(s.subgraph.Edges[1].To, check.Equals, "subgraph1_node3")
 
-	s.subgraph.Forward("node2", "subgraph1.subgraph2.node4")
+	s.subgraph.Connect("node2", "subgraph1.subgraph2.node4")
 	c.Assert(len(s.subgraph.Edges), check.Equals, 3)
 	c.Assert(s.subgraph.Edges[2].From, check.Equals, "node2")
 	c.Assert(s.subgraph.Edges[2].To, check.Equals, "subgraph1_subgraph2_node4")
 
-	s.subgraph.Forward("subgraph1.subgraph2.node4", "node2")
+	s.subgraph.Connect("subgraph1.subgraph2.node4", "node2")
 	c.Assert(len(s.subgraph.Edges), check.Equals, 4)
 	c.Assert(s.subgraph.Edges[3].From, check.Equals, "subgraph1_subgraph2_node4")
 	c.Assert(s.subgraph.Edges[3].To, check.Equals, "node2")
 }
 
 func (s *DotSuite) TestConnectSuccessHead(c *check.C) {
-	s.subgraph.Forward("node1", "subgraph1")
+	s.subgraph.Connect("node1", "subgraph1")
 	c.Assert(len(s.subgraph.Edges), check.Equals, 1)
 	c.Assert(s.subgraph.Edges[0].From, check.Equals, "node1")
 	c.Assert(s.subgraph.Edges[0].To, check.Equals, "subgraph1_node3")
 
-	s.subgraph.Forward("node1", "subgraph1.subgraph2")
+	s.subgraph.Connect("node1", "subgraph1.subgraph2")
 	c.Assert(len(s.subgraph.Edges), check.Equals, 2)
 	c.Assert(s.subgraph.Edges[1].From, check.Equals, "node1")
 	c.Assert(s.subgraph.Edges[1].To, check.Equals, "subgraph1_subgraph2_node4")

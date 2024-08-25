@@ -3,6 +3,7 @@ package streaming
 import (
 	"log"
 	"sync"
+	"time"
 )
 
 func Apply[T any](done <-chan struct{}, ch <-chan T, fn func(T) T) <-chan T {
@@ -364,4 +365,47 @@ func Loop[T any](done <-chan struct{}, data []T) (<-chan T, error) {
 	}()
 
 	return out, nil
+}
+
+func Batch[T any](doneCh <-chan struct{}, inCh <-chan T, batchSize int, timeout time.Duration) <-chan []T {
+	outCh := make(chan []T)
+
+	go func() {
+		defer close(outCh)
+		batch := make([]T, 0, batchSize)
+		timer := time.NewTimer(timeout)
+
+		for {
+			select {
+			case <-doneCh:
+				if len(batch) > 0 {
+					outCh <- batch
+				}
+				return
+
+			case item, ok := <-inCh:
+				if !ok {
+					if len(batch) > 0 {
+						outCh <- batch
+					}
+					return
+				}
+
+				batch = append(batch, item)
+				if len(batch) == batchSize {
+					outCh <- batch
+					batch = batch[:0] // make([]T, 0, batchSize)
+					timer.Reset(timeout)
+				}
+			case <-timer.C:
+				// Timeout, send the current batch even if it's not full
+				if len(batch) > 0 {
+					outCh <- batch
+					batch = batch[:0] // make([]T, 0, batchSize)
+				}
+				timer.Reset(timeout)
+			}
+		}
+	}()
+	return outCh
 }

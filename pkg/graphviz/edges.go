@@ -24,6 +24,7 @@ func (t Edge) Dot(indent int, prefix string) string {
 	if !strings.HasPrefix(t.To, prefix) {
 		to = Prefix(prefix, to)
 	}
+
 	var sb strings.Builder
 	sb.WriteString(Indent(indent))
 	sb.WriteString(strcase.ToCamel(from))

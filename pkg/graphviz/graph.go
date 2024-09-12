@@ -9,25 +9,26 @@ import (
 )
 
 type Graph struct {
-	ID         string
-	ShowLegend bool
-	IsStrict   bool
-	IsDigraph  bool
-	Label      string
-	Attributes map[string]interface{}
-	Global     map[string]map[string]interface{}
-	Nodes      []*Node
-	Edges      []*Edge
-	Subgraphs  []*Subgraph
+	ID          string
+	ShowLegend  bool
+	IsStrict    bool
+	IsDigraph   bool
+	Label       string
+	Attributes  map[string]interface{}
+	Global      map[string]map[string]interface{}
+	Nodes       []*Node
+	Edges       []*Edge
+	Subgraphs   []*Subgraph
+	ImageMapper ImageMapFn
 }
 
-func (t *Graph) AddNode(node ...*Node) *Graph {
-	t.Nodes = append(t.Nodes, node...)
+func (t *Graph) AddNode(nodes ...*Node) *Graph {
+	t.Nodes = append(t.Nodes, nodes...)
 	return t
 }
 
-func (t *Graph) AddSubgraph(sg *Subgraph) *Graph {
-	t.Subgraphs = append(t.Subgraphs, sg)
+func (t *Graph) AddSubgraph(sgs ...*Subgraph) *Graph {
+	t.Subgraphs = append(t.Subgraphs, sgs...)
 	return t
 }
 
@@ -68,18 +69,20 @@ func (t Graph) Dot() string {
 		sb.WriteString("\n")
 	}
 
-	var prefix string
+	prefix := ""
 
 	// Nodes
 	if len(t.Nodes) > 0 {
 		sb.WriteString("\n")
 	}
 	for _, n := range t.Nodes {
+		n.SetImageMapper(t.ImageMapper)
 		sb.WriteString(n.Dot(1, prefix) + "\n")
 	}
 
 	// Subgraphs
 	for _, sg := range t.Subgraphs {
+		sg.SetImageMapper(t.ImageMapper)
 		sb.WriteString(sg.Dot(1, prefix) + "\n")
 	}
 
@@ -98,6 +101,8 @@ func (t Graph) Dot() string {
 		sb.WriteString("      label=\"Legend\";\n")
 		sb.WriteString("      style=solid;\n")
 		sb.WriteString("      color=grey;\n")
+		//sb.WriteString("      nodesep=0.1;\n")
+		//sb.WriteString("      ranksep=0.2;\n")
 		for legend := range OrderLegend(legendCh) {
 			sb.WriteString(fmt.Sprintf("    Legend%s [label=\"%s\", shape=none, labelloc=b, image=\"%s\"];\n", strcase.ToCamel(legend.Label), legend.Label, legend.Path))
 		}

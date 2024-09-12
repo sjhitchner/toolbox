@@ -7,12 +7,13 @@ import (
 )
 
 type Subgraph struct {
-	ID         string
-	Label      string
-	Attributes map[string]interface{}
-	Nodes      []*Node
-	Edges      []*Edge
-	Subgraphs  []*Subgraph
+	ID          string
+	Label       string
+	Attributes  map[string]interface{}
+	Nodes       []*Node
+	Edges       []*Edge
+	Subgraphs   []*Subgraph
+	ImageMapper ImageMapFn
 }
 
 func (t Subgraph) String() string {
@@ -41,11 +42,16 @@ func (t Subgraph) Dot(indent int, prefix string) string {
 	if len(t.Nodes) > 0 {
 		sb.WriteString("\n")
 	}
+
+	prefix += "_"
+
 	for _, n := range t.Nodes {
+		n.ImageMapper = t.ImageMapper
 		sb.WriteString(n.Dot(indent+1, prefix) + "\n")
 	}
 
 	for _, sg := range t.Subgraphs {
+		sg.ImageMapper = t.ImageMapper
 		sb.WriteString(sg.Dot(indent+1, prefix) + "\n")
 	}
 
@@ -61,14 +67,20 @@ func (t Subgraph) Dot(indent int, prefix string) string {
 	return sb.String()
 }
 
-func (t *Subgraph) AddNode(node ...*Node) *Subgraph {
-	t.Nodes = append(t.Nodes, node...)
+func (t *Subgraph) AddNode(nodes ...*Node) *Subgraph {
+	t.Nodes = append(t.Nodes, nodes...)
 	return t
 }
 
-func (t *Subgraph) AddSubgraph(subsg ...*Subgraph) *Subgraph {
-	t.Subgraphs = append(t.Subgraphs, subsg...)
+func (t *Subgraph) AddSubgraph(sgs ...*Subgraph) *Subgraph {
+	t.Subgraphs = append(t.Subgraphs, sgs...)
 	return t
+}
+
+func (t *Subgraph) SetImageMapper(fn ImageMapFn) {
+	if t.ImageMapper == nil {
+		t.ImageMapper = fn
+	}
 }
 
 func (t *Subgraph) BiConnect(from string, tos ...string) *Subgraph {

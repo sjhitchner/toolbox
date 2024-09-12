@@ -62,6 +62,7 @@ type Image struct {
 }
 
 func Prefix(prefix, id string) string {
+	// id = id + "_"
 	if prefix == "" {
 		return id
 	}
@@ -90,29 +91,22 @@ func Attributes(m map[string]interface{}, attrs ...string) string {
 	for k, v := range m {
 		attrs = append(attrs, fmt.Sprintf("%s=%s", k, Quote(v)))
 	}
+
+	if len(attrs) == 0 {
+		return ""
+	}
+
 	return "[" + strings.Join(attrs, ",") + "]"
 }
 
 // ImageMapFn
 // id is the ID of the node the image will be placed
 // imageType is the type of image you will be placing
-type ImageMapFn func(id string, imageType ImageType) Image
+type ImageMapFn func(imageType ImageType) Image
 
-var imageMapFn = func(id string, imageType ImageType) Image {
-	return Image{}
-}
-
-// SetImageMapper
-// set a custom image mapper function
-func SetImageMapper(fn ImageMapFn) {
-	imageMapFn = fn
-}
-
-func ImageMapper(id string, imageType ImageType) string {
-	image := imageMapFn(id, imageType)
-	go func() {
-		legendCh <- image
-	}()
+func ImageMapper(fn ImageMapFn, imageType ImageType) string {
+	image := fn(imageType)
+	legendCh <- image
 	return image.Path
 }
 
@@ -163,18 +157,29 @@ func (t Graph) WriteDot(writer io.Writer) error {
 }
 
 // Generates an SVG from the dot file using the dot binary
-func (t Graph) WriteSVGFile(filename string) error {
+func (t Graph) WriteSVG(filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("error creating file: %v", err)
 	}
 	defer file.Close()
 
-	return t.WriteSVG(file)
+	return t.WriteImage(file, "svg")
 }
 
-func (t Graph) WriteSVG(writer io.Writer) error {
-	cmd := exec.Command("dot", "-Tsvg")
+// Generates an SVG from the dot file using the dot binary
+func (t Graph) WritePNG(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	return t.WriteImage(file, "png")
+}
+
+func (t Graph) WriteImage(writer io.Writer, typ string) error {
+	cmd := exec.Command("dot", "-T"+typ)
 	cmd.Stdin = strings.NewReader(t.Dot())
 
 	out := &bytes.Buffer{}
@@ -187,7 +192,7 @@ func (t Graph) WriteSVG(writer io.Writer) error {
 
 	_, err = io.Copy(writer, out)
 	if err != nil {
-		return fmt.Errorf("error copying SVG output: %v", err)
+		return fmt.Errorf("error copying output: %v", err)
 	}
 
 	return nil

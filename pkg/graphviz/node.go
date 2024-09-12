@@ -9,10 +9,11 @@ import (
 )
 
 type Node struct {
-	ID         string
-	Label      string
-	Image      ImageType
-	Attributes map[string]interface{}
+	ID          string
+	Label       string
+	Image       ImageType
+	Attributes  map[string]interface{}
+	ImageMapper ImageMapFn
 }
 
 func (t Node) Dot(indent int, prefix string) string {
@@ -25,7 +26,7 @@ func (t Node) Dot(indent int, prefix string) string {
 		attrs = append(attrs,
 			"shape=none",
 			"labelloc=m",
-			fmt.Sprintf("image=\"%s\"", ImageMapper(prefix, t.Image)),
+			fmt.Sprintf("image=\"%s\"", ImageMapper(t.ImageMapper, t.Image)),
 		)
 	}
 
@@ -35,6 +36,12 @@ func (t Node) Dot(indent int, prefix string) string {
 	sb.WriteString(" ")
 	sb.WriteString(Attributes(t.Attributes, attrs...))
 	return sb.String()
+}
+
+func (t *Node) SetImageMapper(fn ImageMapFn) {
+	if t.ImageMapper == nil {
+		t.ImageMapper = fn
+	}
 }
 
 func (t Node) String() string {

@@ -3,6 +3,7 @@ package streaming
 import (
 	"log"
 	"sync"
+	"time"
 )
 
 func Apply[T any](done <-chan struct{}, ch <-chan T, fn func(T) T) <-chan T {
@@ -48,8 +49,12 @@ func Morph[I any, O any](done <-chan struct{}, ch <-chan I, fn func(I) (O, error
 }
 
 func Merge[T any](in ...<-chan T) <-chan T {
+	return MergeBuffer[T](1, in...)
+}
+
+func MergeBuffer[T any](buffer int, in ...<-chan T) <-chan T {
 	var wg sync.WaitGroup
-	out := make(chan T)
+	out := make(chan T, buffer)
 
 	fn := func(ch <-chan T) {
 		for v := range ch {
@@ -105,6 +110,56 @@ func MergeDone[T any](done <-chan struct{}, ch ...<-chan T) <-chan T {
 	}()
 
 	return out
+}
+
+func MergeError[T any](inCh []<-chan T, errCh []<-chan error) (<-chan T, <-chan error) {
+
+	var wg sync.WaitGroup
+
+	outCh := make(chan T)
+	outErrCh := make(chan error)
+
+	fnOut := func(ch <-chan T) {
+		for v := range ch {
+			outCh <- v
+		}
+		wg.Done()
+	}
+
+	fnErr := func(ch <-chan error) {
+		for v := range ch {
+			outErrCh <- v
+		}
+		wg.Done()
+	}
+
+	// Start a Goroutine for each input channel to forward values to the output channel.
+	for _, ch := range inCh {
+		if ch == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go fnOut(ch)
+	}
+
+	for _, err := range errCh {
+		if err == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go fnErr(err)
+	}
+
+	// Start a Goroutine to close the output channel when all input channels are closed.
+	go func() {
+		wg.Wait()
+		close(outCh)
+		close(outErrCh)
+	}()
+
+	return outCh, outErrCh
 }
 
 func Demultiplex[T any](done <-chan struct{}, in <-chan T, ch ...chan<- T) {
@@ -270,4 +325,87 @@ func ErrorLog(in <-chan error) {
 			}
 		}
 	}()
+}
+
+func Copy[T any](out chan<- T, in <-chan T) {
+	go func() {
+		for v := range in {
+			out <- v
+		}
+	}()
+}
+
+func CopyWG[T any](wg *sync.WaitGroup, out chan<- T, in <-chan T) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for v := range in {
+			out <- v
+		}
+	}()
+}
+
+func Loop[T any](done <-chan struct{}, data []T) (<-chan T, error) {
+	out := make(chan T)
+	go func() {
+		defer close(out)
+
+		var index int
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				out <- data[index]
+
+				index = (index + 1) % len(data)
+			}
+		}
+
+	}()
+
+	return out, nil
+}
+
+func Batch[T any](doneCh <-chan struct{}, inCh <-chan T, batchSize int, timeout time.Duration) <-chan []T {
+	outCh := make(chan []T)
+
+	go func() {
+		defer close(outCh)
+		batch := make([]T, 0, batchSize)
+		timer := time.NewTimer(timeout)
+
+		for {
+			select {
+			case <-doneCh:
+				if len(batch) > 0 {
+					outCh <- batch
+				}
+				return
+
+			case item, ok := <-inCh:
+				if !ok {
+					if len(batch) > 0 {
+						outCh <- batch
+					}
+					return
+				}
+
+				batch = append(batch, item)
+				if len(batch) == batchSize {
+					outCh <- batch
+					batch = batch[:0] // make([]T, 0, batchSize)
+					timer.Reset(timeout)
+				}
+			case <-timer.C:
+				// Timeout, send the current batch even if it's not full
+				if len(batch) > 0 {
+					outCh <- batch
+					batch = batch[:0] // make([]T, 0, batchSize)
+				}
+				timer.Reset(timeout)
+			}
+		}
+	}()
+	return outCh
 }

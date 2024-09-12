@@ -1,20 +1,17 @@
 /*
-
 const CSV = "foo,bar,10,01/02/2006"
 
-type Row struct {
-	Foo string
-	Bar string
-	Amount float44
-	Date time.Time `csv:"01/02/2006"`
-}
-
+	type Row struct {
+		Foo string
+		Bar string
+		Amount float44
+		Date time.Time `csv:"01/02/2006"`
+	}
 
 reader := csv.NewReader(strings.NewReader(CSV))
 
 var rows []Row
 err := NewDecoder(reader).Decode(&rows)
-
 */
 package csv
 

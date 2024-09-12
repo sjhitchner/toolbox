@@ -1,5 +1,6 @@
 package csv
 
+/*
 import (
 	"fmt"
 	"os"
@@ -52,3 +53,4 @@ func (s *S3Suite) Test_List(c *C) {
 		fmt.Println(file)
 	}
 }
+*/

@@ -45,6 +45,7 @@ type Lexer struct {
 	tokens  chan Token
 }
 
+// TODO should use reader and buffer
 func New(input string, initialState StateFunc) *Lexer {
 	l := &Lexer{
 		input:   input,
@@ -101,6 +102,10 @@ func (t *Lexer) Next() rune {
 func (t *Lexer) Skip() {
 	t.Next()
 	t.Ignore()
+}
+
+func (t *Lexer) NotEOF() bool {
+	return t.pos < len(t.input)
 }
 
 // Ignore skips over the pending input before this point.

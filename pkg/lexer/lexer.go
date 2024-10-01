@@ -2,6 +2,8 @@ package lexer
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -49,10 +51,40 @@ type Lexer struct {
 func New(input string, initialState StateFunc) *Lexer {
 	l := &Lexer{
 		input:   input,
-		tokens:  make(chan Token, 2),
+		tokens:  make(chan Token, 102),
 		stateFn: initialState,
 	}
 	return l
+}
+
+// TODO Should use reader and buffer
+func NewFromReader(reader io.Reader, initialState StateFunc) (*Lexer, error) {
+	buf, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	l := &Lexer{
+		input:   string(buf),
+		tokens:  make(chan Token, 2),
+		stateFn: initialState,
+	}
+	return l, nil
+}
+
+// TODO Should use reader and buffer
+func NewFromFile(filename string, initialState StateFunc) (*Lexer, error) {
+	buf, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	l := &Lexer{
+		input:   string(buf),
+		tokens:  make(chan Token, 2),
+		stateFn: initialState,
+	}
+	return l, nil
 }
 
 func (t *Lexer) NextToken() Token {
@@ -94,6 +126,7 @@ func (t *Lexer) Next() rune {
 
 	if int(t.pos) >= len(t.input) {
 		t.width = 0
+		//panic("here")
 		return EOF
 	}
 	return r
@@ -119,6 +152,15 @@ func (l *Lexer) Backup() {
 	l.pos -= l.width
 }
 
+func (l *Lexer) BackupN(n int) {
+	l.pos -= (n * l.width)
+}
+
+// Return the current buffer
+func (l *Lexer) Current() string {
+	return l.input[l.start:l.pos]
+}
+
 // Accept consumes the next rune
 // if it's from the valid set.
 func (l *Lexer) Accept(valid string) bool {
@@ -138,17 +180,43 @@ func (l *Lexer) AcceptRun(valid string) {
 
 // Until consumes a run of runes until the str.
 func (l *Lexer) UntilRune(r rune) {
-	for l.Next() != r {
+	for !l.NotEOF() {
+		if l.Next() == r {
+			l.Backup()
+			return
+		}
 	}
-	l.Backup()
 }
 
 // Until consumes a run of runes until the str.
 func (l *Lexer) Until(str string) {
-	if strings.HasPrefix(l.input[l.pos:], str) {
-		l.pos += len(str)
+	for !l.NotEOF() {
+		l.Next()
+		if strings.HasSuffix(l.input, str) {
+			l.BackupN(len(str))
+			return
+		}
 	}
-	l.Backup()
+}
+
+func (l *Lexer) Find(str string) {
+	for !l.NotEOF() {
+		l.Next()
+		if strings.HasPrefix(l.input, str) {
+			return
+		}
+		l.Skip()
+	}
+}
+
+// Find a specific rune and move the position to that char
+func (l *Lexer) FindRune(r rune) {
+	for !l.NotEOF() {
+		if l.Next() == r {
+			l.Backup()
+		}
+		l.Skip()
+	}
 }
 
 func (l *Lexer) Matches(str string) bool {

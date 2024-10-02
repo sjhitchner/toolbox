@@ -126,7 +126,6 @@ func (t *Lexer) Next() rune {
 
 	if int(t.pos) >= len(t.input) {
 		t.width = 0
-		//panic("here")
 		return EOF
 	}
 	return r
@@ -144,6 +143,12 @@ func (t *Lexer) NotEOF() bool {
 // Ignore skips over the pending input before this point.
 func (l *Lexer) Ignore() {
 	l.start = l.pos
+}
+
+// Reset resets start and pos to beginning (used for testing)
+func (l *Lexer) Reset() {
+	l.start = 0
+	l.pos = 0
 }
 
 // Backup steps back one rune.
@@ -180,7 +185,7 @@ func (l *Lexer) AcceptRun(valid string) {
 
 // Until consumes a run of runes until the str.
 func (l *Lexer) UntilRune(r rune) {
-	for !l.NotEOF() {
+	for l.NotEOF() {
 		if l.Next() == r {
 			l.Backup()
 			return
@@ -190,34 +195,40 @@ func (l *Lexer) UntilRune(r rune) {
 
 // Until consumes a run of runes until the str.
 func (l *Lexer) Until(str string) {
-	for !l.NotEOF() {
+	for l.NotEOF() {
 		l.Next()
-		if strings.HasSuffix(l.input, str) {
+		if strings.HasSuffix(l.input[l.start:l.pos], str) {
 			l.BackupN(len(str))
 			return
 		}
 	}
 }
 
-func (l *Lexer) Find(str string) {
-	for !l.NotEOF() {
-		l.Next()
-		if strings.HasPrefix(l.input, str) {
+// Find brings you to the beginning of the string
+func (l *Lexer) Find(substring string) {
+	for l.NotEOF() {
+		l.Skip()
+		if l.Matches(substring) {
 			return
 		}
-		l.Skip()
 	}
 }
 
-// Find a specific rune and move the position to that char
+// Find a specific rune and move the next position to that char
 func (l *Lexer) FindRune(r rune) {
-	for !l.NotEOF() {
+	for l.NotEOF() {
 		if l.Next() == r {
-			l.Backup()
+			l.Ignore()
+			return
 		}
-		l.Skip()
 	}
 }
+
+/*
+	fmt.Printf("FF '%s' '%s' '%s'\n", l.input[l.start:l.pos], l.input[l.start:], string(r))
+	fmt.Printf("FF '%s' '%s' '%s'\n", l.input[l.start:l.pos], l.input[l.start:], string(r))
+	fmt.Printf("FF '%s' '%s' '%s'\n", l.input[l.start:l.pos], l.input[l.start:], string(r))
+*/
 
 func (l *Lexer) Matches(str string) bool {
 	if strings.HasPrefix(l.input[l.pos:], str) {

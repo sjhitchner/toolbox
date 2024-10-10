@@ -131,8 +131,23 @@ func (t *Lexer) Next() rune {
 	return r
 }
 
+func (t *Lexer) NextN(c int) rune {
+	var r rune
+	for i := 0; i < c; i++ {
+		r = t.Next()
+	}
+	return r
+}
+
 func (t *Lexer) Skip() {
 	t.Next()
+	t.Ignore()
+}
+
+func (t *Lexer) SkipN(c int) {
+	for i := 0; i < c; i++ {
+		t.Next()
+	}
 	t.Ignore()
 }
 
@@ -185,8 +200,11 @@ func (l *Lexer) AcceptRun(valid string) {
 
 // Until consumes a run of runes until the str.
 func (l *Lexer) UntilRune(r rune) {
+	//fmt.Printf("UR [%s]\n", l.input[l.start:])
 	for l.NotEOF() {
-		if l.Next() == r {
+		v := l.Next()
+		//fmt.Printf("URL[%s] [%t] [%s]\n", string(v), (v == r), l.input[l.start:l.pos])
+		if v == r {
 			l.Backup()
 			return
 		}
@@ -199,29 +217,33 @@ func (l *Lexer) Until(str string) {
 		l.Next()
 		if strings.HasSuffix(l.input[l.start:l.pos], str) {
 			l.BackupN(len(str))
+			//fmt.Printf("U[%s] [%s]\n", l.input[l.start:], l.input[l.start:l.pos])
 			return
 		}
 	}
 }
 
 // Find brings you to the beginning of the string
-func (l *Lexer) Find(substring string) {
+func (l *Lexer) Find(substring string) bool {
 	for l.NotEOF() {
 		l.Skip()
 		if l.Matches(substring) {
-			return
+			l.pos += len(substring)
+			return true
 		}
 	}
+	return false
 }
 
 // Find a specific rune and move the next position to that char
-func (l *Lexer) FindRune(r rune) {
+func (l *Lexer) FindRune(r rune) bool {
 	for l.NotEOF() {
 		if l.Next() == r {
 			l.Ignore()
-			return
+			return true
 		}
 	}
+	return false
 }
 
 /*
@@ -231,7 +253,9 @@ func (l *Lexer) FindRune(r rune) {
 */
 
 func (l *Lexer) Matches(str string) bool {
+	// fmt.Printf("MATCHES %t [%s] [%s]\n", strings.HasPrefix(l.input[l.pos:], str), str, l.input[l.pos:l.pos+10])
 	if strings.HasPrefix(l.input[l.pos:], str) {
+		l.start = l.pos
 		l.pos += len(str)
 		return true
 	}

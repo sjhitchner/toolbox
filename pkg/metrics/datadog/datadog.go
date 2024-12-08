@@ -40,3 +40,9 @@ func (t *DatadogBackend) Counter(key string, count int64, tags ...string) {
 		log.Println(err)
 	}
 }
+
+func (t *DatadogBackend) Gauge(key string, value float64, tags ...string) {
+	if err := t.client.Gauge(key, value, tags, 1); err != nil {
+		log.Println(err)
+	}
+}

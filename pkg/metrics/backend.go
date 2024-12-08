@@ -23,6 +23,7 @@ func Initialize(done <-chan struct{}, backend Backend) {
 type Backend interface {
 	Timer(key string, dur time.Duration, tags ...string)
 	Counter(key string, count int64, tags ...string)
+	Gauge(key string, value float64, tags ...string)
 }
 
 type NopBackend struct {
@@ -34,10 +35,14 @@ func (t *NopBackend) Timer(key string, dur time.Duration, tags ...string) {
 func (t *NopBackend) Counter(key string, count int64, tags ...string) {
 }
 
+func (t *NopBackend) Gauge(key string, value float64, tags ...string) {
+}
+
 type Processor struct {
 	wg          sync.WaitGroup
 	counterPool sync.Pool
 	timerPool   sync.Pool
+	gaugePool   sync.Pool
 
 	backend Backend
 
@@ -60,20 +65,35 @@ func NewProcessor(done <-chan struct{}, backend Backend) *Processor {
 				return &timer{}
 			},
 		},
+		gaugePool: sync.Pool{
+			New: func() interface{} {
+				return &gauge{}
+			},
+		},
 	}
 }
 
-func (t *Processor) NewCounter(key string, count int64) *counter {
+func (t *Processor) NewCounter(key string, count int64, tags ...string) *counter {
 	m := t.counterPool.Get().(*counter)
 	m.key = key
 	m.count = count
+	m.tags = tags
 	return m
 }
 
-func (t *Processor) NewTimer(key string, start time.Time) *timer {
+func (t *Processor) NewTimer(key string, start time.Time, tags ...string) *timer {
 	m := t.timerPool.Get().(*timer)
 	m.key = key
 	m.start = start
+	m.tags = tags
+	return m
+}
+
+func (t *Processor) NewGauge(key string, value float64, tags ...string) *gauge {
+	m := t.gaugePool.Get().(*gauge)
+	m.key = key
+	m.value = value
+	m.tags = tags
 	return m
 }
 
@@ -92,6 +112,9 @@ func (t *Processor) Publish(metric Metric) {
 
 		case *timer:
 			t.timerPool.Put(m)
+
+		case *gauge:
+			t.gaugePool.Put(m)
 
 		default:
 			log.Println("full")
@@ -118,12 +141,16 @@ func (t *Processor) Loop() {
 func (t *Processor) innerLoop(metric Metric) {
 	switch m := metric.(type) {
 	case *counter:
-		t.backend.Counter(m.key, m.count)
+		t.backend.Counter(m.key, m.count, m.tags...)
 		t.counterPool.Put(m)
 
 	case *timer:
-		t.backend.Timer(m.key, m.end.Sub(m.start))
+		t.backend.Timer(m.key, m.end.Sub(m.start), m.tags...)
 		t.timerPool.Put(m)
+
+	case *gauge:
+		t.backend.Gauge(m.key, m.value, m.tags...)
+		t.gaugePool.Put(m)
 
 	default:
 		log.Println("invalid metric type")

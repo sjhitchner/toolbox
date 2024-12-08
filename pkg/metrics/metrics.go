@@ -14,13 +14,13 @@ type Metric interface {
 // defer t.Emit()
 type timer struct {
 	key   string
+	tags  []string
 	start time.Time
 	end   time.Time
 }
 
-func Timer(key string) *timer {
-	// return &timer{key: key, start: time.Now()}
-	return processor.NewTimer(key, time.Now())
+func Timer(key string, tags ...string) *timer {
+	return processor.NewTimer(key, time.Now(), tags...)
 }
 
 func (t *timer) Emit() {
@@ -34,19 +34,19 @@ func (t *timer) Emit() {
 type counter struct {
 	key   string
 	count int64
+	tags  []string
 }
 
-func Counter(key string) *counter {
-	return processor.NewCounter(key, 0)
+func Counter(key string, tags ...string) *counter {
+	return processor.NewCounter(key, 0, tags...)
 }
 
-func CounterAt(key string, i int) *counter {
-	// return &counter{key, int64(i)}
-	return processor.NewCounter(key, int64(i))
+func CounterAt(key string, i int, tags ...string) *counter {
+	return processor.NewCounter(key, int64(i), tags...)
 }
 
-func CounterAt64(key string, i int64) *counter {
-	return processor.NewCounter(key, i)
+func CounterAt64(key string, i int64, tags ...string) *counter {
+	return processor.NewCounter(key, i, tags...)
 }
 
 func (t *counter) Incr() {
@@ -65,76 +65,24 @@ func (t *counter) Emit() {
 	processor.Publish(t)
 }
 
-/*
-type timerCounter struct {
-	timer   *timer
-	counter *counter
-}
-
-func TimerCounter(key string) *timerCounter {
-	return &timerCounter{
-		Timer(key),
-		CounterAt(key, 1),
-	}
-}
-
-func TimerCounterAt(key string, i int) *timerCounter {
-	return &timerCounter{
-		Timer(key),
-		CounterAt(key, i),
-	}
-}
-
-func (t *timerCounter) Incr() {
-	t.counter.Incr()
-}
-
-func (t *timerCounter) IncrBy(i int) {
-	t.counter.IncrBy(i)
-}
-
-func (t *timerCounter) Emit() {
-	t.counter.Emit()
-	t.timer.Emit()
-}
-
-type keyvalue struct {
-	key   string
-	value string
-}
-
-func KeyValue(key string, value string) *keyvalue {
-	return &keyvalue{key, value}
-}
-
-func (t *keyvalue) Emit() {
-	kv := NewKeyValue(t.key, t.value)
-	processor.Publish(kv)
-}
-
 type gauge struct {
 	key   string
-	value int
+	value float64
+	tags  []string
 }
 
-func Gauge(key string) *gauge {
-	return &gauge{key, 0}
+func Gauge(key string, tags ...string) *gauge {
+	return processor.NewGauge(key, 0, tags...)
 }
 
-func GaugeAt(key string, value int) *gauge {
-	return &gauge{key, value}
+func GaugeAt(key string, value float64, tags ...string) *gauge {
+	return processor.NewGauge(key, value, tags...)
 }
 
-func (t *gauge) Incr() {
-	t.value += 1
-}
-
-func (t *gauge) IncrBy(i int) {
-	t.value += i
+func (t *gauge) Set(f float64) {
+	t.value = f
 }
 
 func (t *gauge) Emit() {
-	gauge := NewGauge(t.key, t.value)
-	processor.Publish(gauge)
+	processor.Publish(t)
 }
-*/

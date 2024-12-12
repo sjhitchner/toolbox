@@ -46,3 +46,15 @@ func (t *DatadogBackend) Gauge(key string, value float64, tags ...string) {
 		log.Println(err)
 	}
 }
+
+func (t *DatadogBackend) Histogram(key string, value float64, tags ...string) {
+	if err := t.client.Histogram(key, value, tags, 1); err != nil {
+		log.Println(err)
+	}
+}
+
+func (t *DatadogBackend) Distribution(key string, value float64, tags ...string) {
+	if err := t.client.Distribution(key, value, tags, 1); err != nil {
+		log.Println(err)
+	}
+}

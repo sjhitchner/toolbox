@@ -24,6 +24,8 @@ type Backend interface {
 	Timer(key string, dur time.Duration, tags ...string)
 	Counter(key string, count int64, tags ...string)
 	Gauge(key string, value float64, tags ...string)
+	Histogram(key string, value float64, tags ...string)
+	Distribution(key string, value float64, tags ...string)
 }
 
 type NopBackend struct {
@@ -39,65 +41,73 @@ func (t *NopBackend) Gauge(key string, value float64, tags ...string) {
 }
 
 type Processor struct {
-	wg          sync.WaitGroup
-	counterPool sync.Pool
-	timerPool   sync.Pool
-	gaugePool   sync.Pool
+	pool sync.Pool
 
 	backend Backend
 
 	doneCh  <-chan struct{}
-	queueCh chan Metric
+	queueCh chan *metric
 }
 
 func NewProcessor(done <-chan struct{}, backend Backend) *Processor {
 	return &Processor{
 		doneCh:  done,
-		queueCh: make(chan Metric, BufferSize),
+		queueCh: make(chan *metric, BufferSize),
 		backend: backend,
-		counterPool: sync.Pool{
+		pool: sync.Pool{
 			New: func() interface{} {
-				return &counter{}
-			},
-		},
-		timerPool: sync.Pool{
-			New: func() interface{} {
-				return &timer{}
-			},
-		},
-		gaugePool: sync.Pool{
-			New: func() interface{} {
-				return &gauge{}
+				return &metric{}
 			},
 		},
 	}
 }
 
-func (t *Processor) NewCounter(key string, count int64, tags ...string) *counter {
-	m := t.counterPool.Get().(*counter)
+func (t *Processor) NewCounter(key string, count int64, tags ...string) CounterMetric {
+	m := t.pool.Get().(*metric)
+	m.typ = CounterType
 	m.key = key
 	m.count = count
 	m.tags = tags
 	return m
 }
 
-func (t *Processor) NewTimer(key string, start time.Time, tags ...string) *timer {
-	m := t.timerPool.Get().(*timer)
+func (t *Processor) NewTimer(key string, start time.Time, tags ...string) TimerMetric {
+	m := t.pool.Get().(*metric)
+	m.typ = TimerType
 	m.key = key
 	m.start = start
 	m.tags = tags
 	return m
 }
 
-func (t *Processor) NewGauge(key string, value float64, tags ...string) *gauge {
-	m := t.gaugePool.Get().(*gauge)
+func (t *Processor) NewGauge(key string, value float64, tags ...string) GaugeMetric {
+	m := t.pool.Get().(*metric)
+	m.typ = GaugeType
 	m.key = key
 	m.value = value
 	m.tags = tags
 	return m
 }
 
-func (t *Processor) Publish(metric Metric) {
+func (t *Processor) NewHistogram(key string, value float64, tags ...string) HistogramMetric {
+	m := t.pool.Get().(*metric)
+	m.typ = HistogramType
+	m.key = key
+	m.value = value
+	m.tags = tags
+	return m
+}
+
+func (t *Processor) NewDistribution(key string, value float64, tags ...string) DistributionMetric {
+	m := t.pool.Get().(*metric)
+	m.typ = DistributionType
+	m.key = key
+	m.value = value
+	m.tags = tags
+	return m
+}
+
+func (t *Processor) Publish(metric *metric) {
 	if t.backend == nil {
 		return
 	}
@@ -105,28 +115,13 @@ func (t *Processor) Publish(metric Metric) {
 	select {
 	case t.queueCh <- metric:
 	default:
-		// Channel is full so we are dropping metric
-		switch m := metric.(type) {
-		case *counter:
-			t.counterPool.Put(m)
-
-		case *timer:
-			t.timerPool.Put(m)
-
-		case *gauge:
-			t.gaugePool.Put(m)
-
-		default:
-			log.Println("full")
-		}
+		t.pool.Put(metric)
+		log.Println("full")
 	}
 }
 
 func (t *Processor) Loop() {
-	t.wg.Add(1)
 	go func() {
-		defer t.wg.Done()
-
 		for {
 			select {
 			case <-t.doneCh:
@@ -138,21 +133,26 @@ func (t *Processor) Loop() {
 	}()
 }
 
-func (t *Processor) innerLoop(metric Metric) {
-	switch m := metric.(type) {
-	case *counter:
+func (t *Processor) innerLoop(m *metric) {
+	switch m.typ {
+	case CounterType:
 		t.backend.Counter(m.key, m.count, m.tags...)
-		t.counterPool.Put(m)
 
-	case *timer:
+	case TimerType:
 		t.backend.Timer(m.key, m.end.Sub(m.start), m.tags...)
-		t.timerPool.Put(m)
 
-	case *gauge:
+	case GaugeType:
 		t.backend.Gauge(m.key, m.value, m.tags...)
-		t.gaugePool.Put(m)
+
+	case HistogramType:
+		t.backend.Histogram(m.key, m.value, m.tags...)
+
+	case DistributionType:
+		t.backend.Distribution(m.key, m.value, m.tags...)
 
 	default:
 		log.Println("invalid metric type")
 	}
+
+	t.pool.Put(m)
 }

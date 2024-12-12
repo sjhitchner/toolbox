@@ -1,3 +1,5 @@
+// Zero-allocatio metric library
+// Handy functions for adding metrics easier
 package metrics
 
 import (
@@ -15,11 +17,15 @@ var (
 	processor  = NewProcessor(nil, nil)
 )
 
+// Initialize
+// Call  to initialize
 func Initialize(done <-chan struct{}, backend Backend) {
 	processor = NewProcessor(done, backend)
 	processor.Loop()
 }
 
+// Backend
+// Implement a backend to support a custom metric backend
 type Backend interface {
 	Timer(key string, dur time.Duration, tags ...string)
 	Counter(key string, count int64, tags ...string)
@@ -28,6 +34,8 @@ type Backend interface {
 	Distribution(key string, value float64, tags ...string)
 }
 
+// NopBackend
+// Metrics are ignored
 type NopBackend struct {
 }
 
@@ -40,6 +48,7 @@ func (t *NopBackend) Counter(key string, count int64, tags ...string) {
 func (t *NopBackend) Gauge(key string, value float64, tags ...string) {
 }
 
+// Processor
 type Processor struct {
 	pool sync.Pool
 
@@ -116,7 +125,8 @@ func (t *Processor) Publish(metric *metric) {
 	case t.queueCh <- metric:
 	default:
 		t.pool.Put(metric)
-		log.Println("full")
+		// TODO logging
+		log.Println("metric queue full")
 	}
 }
 
